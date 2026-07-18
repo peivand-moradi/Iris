@@ -1,0 +1,25 @@
+from dataclasses import dataclass
+
+ALLOWED_CERTAINTY = ("low", "medium", "high")
+
+
+@dataclass
+class TranscriptResult:
+    text: str
+    audio_events: list[str]
+    success: bool
+    error: str | None = None
+
+
+@dataclass
+class InterpretationResult:
+    heard: str
+    possible_meaning: str
+    why: str
+    certainty: str
+    alternative: str | None
+    visual_context_used: bool
+    spoken_summary: str
+    thread_id: str
+    success: bool
+    error: str | None = None

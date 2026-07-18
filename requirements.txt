@@ -1,0 +1,7 @@
+python-dotenv
+sounddevice
+numpy
+opencv-python
+requests
+elevenlabs
+pytest
