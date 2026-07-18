@@ -1,7 +1,7 @@
-python-dotenv
-sounddevice
-numpy
-opencv-python
-requests
-elevenlabs
-pytest
+python-dotenv>=1.0
+sounddevice>=0.4
+numpy>=1.24
+opencv-python>=4.8
+requests>=2.31
+elevenlabs>=1.50
+pytest>=7.0

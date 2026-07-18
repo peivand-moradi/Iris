@@ -51,6 +51,15 @@ Laptop camera / sample image ─────────────────
 
 ## Installation
 
+**Windows (PowerShell):**
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+**macOS / Linux:**
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -119,9 +128,13 @@ python app.py
 
 **Demo mode** (prerecorded sample audio + sample image, real APIs when
 configured, same controller/UI/validation/TTS path):
-```bash
-DEMO_MODE=true python app.py
-```
+
+macOS/Linux: `DEMO_MODE=true python app.py`
+
+PowerShell: `$env:DEMO_MODE="true"; python app.py`
+
+(Or just set `DEMO_MODE=true` in `.env` and run `python app.py` normally on
+any platform.)
 
 ## Smoke tests (Task 2)
 

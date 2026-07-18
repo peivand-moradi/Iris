@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ..camera import LaptopCameraProvider, PiCameraProvider, SampleImageProvider, get_camera_provider
+from camera import LaptopCameraProvider, PiCameraProvider, SampleImageProvider, get_camera_provider
 
 
 def test_sample_image_provider_missing_file_returns_none(tmp_path):
