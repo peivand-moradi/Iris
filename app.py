@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 import tkinter as tk
 
 import audio
@@ -110,12 +111,29 @@ class App:
                 result,
                 camera_notice,
             )
+
+            if self.config.tts_enabled and result.spoken_summary:
+                self._speak(result.spoken_summary)
+                self._listen_for_conversation_trigger(result)
         else:
             self.root.after(
                 0,
                 self.ui.show_error,
                 result.error or "Something went wrong. Please try again.",
             )
+
+    def _listen_for_conversation_trigger(self, interpretation_result) -> None:
+        """After the result is spoken aloud, listen once for the user saying
+        a conversation-start phrase (e.g. "let's talk") instead of requiring
+        the button. Does nothing if nothing usable was said."""
+        if self._conversation_stop_event is not None:
+            return
+        time.sleep(self.config.conversation_answer_wait_seconds)
+        turn = controller.try_start_conversation_by_voice(interpretation_result)
+        if turn is None:
+            return
+        self._conversation_stop_event = threading.Event()
+        self._conversation_loop(turn)
 
     def trigger_conversation(self) -> None:
         if self._conversation_stop_event is not None:
@@ -129,10 +147,13 @@ class App:
         ).start()
 
     def _run_conversation(self, interpretation_result) -> None:
+        turn = controller.start_conversation(interpretation_result)
+        self._conversation_loop(turn)
+
+    def _conversation_loop(self, turn) -> None:
         stop_event = self._conversation_stop_event
         self.root.after(0, self.ui.set_state, controller.CONVERSATION)
 
-        turn = controller.start_conversation(interpretation_result)
         try:
             while True:
                 if turn.message:

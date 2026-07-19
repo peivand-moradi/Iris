@@ -277,3 +277,59 @@ def end_conversation() -> None:
     exactly once per start_conversation() call."""
     log_event("conversation_ended")
     _lock.release()
+
+
+_CONVERSATION_TRIGGER_PHRASES = ("let's talk", "lets talk", "let us talk")
+
+
+def _mentions_conversation_trigger(text: str) -> bool:
+    lowered = text.lower()
+    return any(phrase in lowered for phrase in _CONVERSATION_TRIGGER_PHRASES)
+
+
+def try_start_conversation_by_voice(
+    interpretation_result: InterpretationResult,
+) -> ConversationTurnResult | None:
+    """Listens once for the user saying a conversation-start phrase (e.g.
+    "let's talk") right after a result was spoken aloud. Reuses the same
+    capture/transcribe primitives as everywhere else in this app.
+
+    Returns None (lock already released) if nothing usable was captured or
+    the phrase wasn't said — the caller does nothing further in that case.
+    Returns a ConversationTurnResult (lock held for the conversation's
+    duration, exactly like start_conversation()) if the phrase was said —
+    the caller MUST then run the normal turn loop and eventually call
+    end_conversation() exactly once.
+    """
+    if not _lock.acquire(blocking=False):
+        return None
+
+    audio_path = audio.get_recent_audio()
+    if audio_path is None:
+        _lock.release()
+        return None
+
+    try:
+        transcript = transcribe_audio(audio_path)
+    except Exception:
+        _lock.release()
+        return None
+    finally:
+        cleanup_temp_file(audio_path)
+
+    if not transcript.success or not transcript.text.strip():
+        _lock.release()
+        return None
+
+    if not _mentions_conversation_trigger(transcript.text):
+        _lock.release()
+        return None
+
+    log_event("conversation_started", trigger="voice")
+    try:
+        result = conversation.start_conversation(interpretation_result)
+        log_event("conversation_turn_received", success=result.success, opening=True)
+        return result
+    except Exception as exc:
+        log_event("conversation_turn_received", success=False, error=str(exc))
+        return _conversation_error_result("The conversation service is unavailable right now.")

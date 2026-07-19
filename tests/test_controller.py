@@ -263,3 +263,85 @@ def test_end_conversation_releases_lock_for_subsequent_interpretation(monkeypatc
     after_release = controller.run_interpretation()
     assert not after_release.success
     assert "No recent speech" in after_release.error
+
+
+def test_try_start_conversation_by_voice_returns_none_when_no_audio(monkeypatch):
+    monkeypatch.setattr(controller.audio, "get_recent_audio", lambda: None)
+
+    result = controller.try_start_conversation_by_voice(_valid_result())
+
+    assert result is None
+    # lock must have been released — a subsequent interpretation isn't blocked
+    blocked = controller.run_interpretation()
+    assert not blocked.success  # fails for its own reason (no audio mocked below), not lock contention
+    assert "already being processed" not in blocked.error
+
+
+def test_try_start_conversation_by_voice_returns_none_when_phrase_not_said(monkeypatch, tmp_path):
+    fake_audio = tmp_path / "audio.wav"
+    fake_audio.write_bytes(b"fake")
+    monkeypatch.setattr(controller.audio, "get_recent_audio", lambda: fake_audio)
+    monkeypatch.setattr(
+        controller, "transcribe_audio",
+        lambda path: TranscriptResult(text="that makes sense", audio_events=[], success=True),
+    )
+
+    result = controller.try_start_conversation_by_voice(_valid_result())
+
+    assert result is None
+
+
+def test_try_start_conversation_by_voice_starts_conversation_on_match(monkeypatch, tmp_path):
+    fake_audio = tmp_path / "audio.wav"
+    fake_audio.write_bytes(b"fake")
+    monkeypatch.setattr(controller.audio, "get_recent_audio", lambda: fake_audio)
+    monkeypatch.setattr(
+        controller, "transcribe_audio",
+        lambda path: TranscriptResult(text="yeah let's talk about it", audio_events=[], success=True),
+    )
+
+    from models import ConversationTurnResult
+
+    monkeypatch.setattr(
+        controller.conversation, "start_conversation",
+        lambda interpretation: ConversationTurnResult(
+            message="Who were you talking to?", conversation_over=False,
+            thread_id="t1", history=[("iris", "Who were you talking to?")], success=True,
+        ),
+    )
+
+    result = controller.try_start_conversation_by_voice(_valid_result())
+
+    assert result is not None
+    assert result.success
+    assert result.message == "Who were you talking to?"
+
+    # lock is held — a concurrent interpretation must be rejected until end_conversation()
+    blocked = controller.run_interpretation()
+    assert not blocked.success
+    assert "already being processed" in blocked.error
+    controller.end_conversation()
+
+
+def test_try_start_conversation_by_voice_matches_without_apostrophe(monkeypatch, tmp_path):
+    fake_audio = tmp_path / "audio.wav"
+    fake_audio.write_bytes(b"fake")
+    monkeypatch.setattr(controller.audio, "get_recent_audio", lambda: fake_audio)
+    monkeypatch.setattr(
+        controller, "transcribe_audio",
+        lambda path: TranscriptResult(text="Lets talk", audio_events=[], success=True),
+    )
+
+    from models import ConversationTurnResult
+
+    monkeypatch.setattr(
+        controller.conversation, "start_conversation",
+        lambda interpretation: ConversationTurnResult(
+            message="ok", conversation_over=False, thread_id="t1", history=[], success=True,
+        ),
+    )
+
+    result = controller.try_start_conversation_by_voice(_valid_result())
+
+    assert result is not None
+    controller.end_conversation()

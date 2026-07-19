@@ -92,7 +92,7 @@ Then fill in `.env` (see "Environment variables" below).
 | `ELEVENLABS_VOICE_ID` | spoken output | required only if `TTS_ENABLED=true` |
 | `AUDIO_BUFFER_SECONDS` | — | rolling buffer length, default `10` |
 | `CAPTURE_SECONDS` | — | reserved for future capture-window tuning |
-| `CONVERSATION_ANSWER_WAIT_SECONDS` | — | conversation mode reply wait, default `6` |
+| `CONVERSATION_ANSWER_WAIT_SECONDS` | — | reply/voice-trigger listen wait, default `4` |
 | `CAMERA_MODE` | — | `laptop` \| `sample` \| `pi` (Task 13, requires Raspberry Pi OS) |
 | `CAMERA_INDEX` | — | OpenCV camera index, default `0` |
 | `TTS_ENABLED` | — | `true`/`false`, default `false` |
@@ -131,11 +131,16 @@ exist.
 
 ## Conversation mode
 
-Pressing **"Let's talk about it"** after a result starts a brief, entirely
-spoken back-and-forth about that interpretation, driven by a **second**
-Backboard assistant (`BACKBOARD_CONVERSATION_ASSISTANT_ID`, its own prompt at
-`prompts/conversation_system_prompt.txt`) — ElevenLabs stays STT+TTS only,
-never the model doing the conversing.
+When `TTS_ENABLED=true`, Iris speaks the result summary aloud as soon as it's
+ready (not just shown on screen), then listens once for the user saying a
+trigger phrase — "let's talk", "lets talk" (STT often drops the apostrophe),
+or "let us talk" — anywhere in what they say next. If it hears one, it starts
+a brief, entirely spoken back-and-forth about that interpretation, driven by
+a **second** Backboard assistant (`BACKBOARD_CONVERSATION_ASSISTANT_ID`, its
+own prompt at `prompts/conversation_system_prompt.txt`) — ElevenLabs stays
+STT+TTS only, never the model doing the conversing. The **"Let's talk about
+it"** button next to the result does the same thing on demand, so both a
+voice cue and a manual click work.
 
 Set it up the same way as the interpretation assistant:
 ```bash
