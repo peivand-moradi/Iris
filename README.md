@@ -11,6 +11,7 @@ workflow (Tasks 1–12) is the first milestone; Raspberry Pi 5 / Picamera2 /
 GPIO integration (Task 13) builds on it without changing the AI pipeline —
 see "Raspberry Pi deployment" below.
 
+Link to the demo video: https://youtube.com/shorts/jH4DaN1oyGE?si=ouUBVSoeQK8I_x8c
 ## Architecture overview
 
 ```
