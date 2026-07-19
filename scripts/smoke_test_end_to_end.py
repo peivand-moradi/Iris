@@ -11,11 +11,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from config import load_config  # noqa: E402
 from logging_setup import configure_logging  # noqa: E402
 
 
 def main() -> None:
-    configure_logging()
+    configure_logging(load_config().log_level)
 
     import controller
 

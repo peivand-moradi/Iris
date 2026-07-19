@@ -17,6 +17,7 @@ of soft guarantee.
 
 import json
 import logging
+import mimetypes
 from pathlib import Path
 
 import requests
@@ -62,10 +63,9 @@ def _build_message_content(transcript: str, audio_events: list[str]) -> str:
     lines.append(
         "Respond with a single JSON object only, no surrounding prose, using exactly these keys: "
         '"heard", "possible_meaning", "why", "certainty" (one of "low", "medium", "high"), '
-        '"alternative" (string or null), "visual_context_used" (true/false), "image_relevance" '
-        '(one of "relevant", "not_relevant", "unavailable"), "visual_description" (one short sentence '
-        'describing what is observable in the image, or "No image was available."), "spoken_summary" '
-        "(one short sentence)."
+        '"alternative" (string or null), "visual_context_used" (true/false), "visual_description" '
+        '(one short sentence describing what is observable in the image, or "No image was available."), '
+        '"spoken_summary" (one short sentence).'
     )
     return "\n".join(lines)
 
@@ -91,7 +91,46 @@ def send_interpretation_request(
     if config.backboard_model:
         data["model_name"] = config.backboard_model
 
+    logger.debug(
+        "Sending interpretation request: provider=%s model=%s image_path=%s",
+        config.backboard_provider or "(backboard default)",
+        config.backboard_model or "(backboard default)",
+        image_path,
+    )
+
     return _post_thread_message(data, image_path, config)
+
+
+def _guess_image_mime_type(image_path: Path) -> str:
+    """Every image this app sends is a photo (camera capture or configured sample
+    image), so an undetectable extension falls back to JPEG rather than a generic
+    octet-stream type that a vision model may refuse to decode."""
+    mime_type, _ = mimetypes.guess_type(image_path.name)
+    return mime_type or "image/jpeg"
+
+
+def _open_image_for_upload(image_path: Path) -> tuple:
+    """Returns (files_dict, open_file_handle) for the given image, or (None, None)
+    if the image cannot be read. Never raises — an unreadable/missing image should
+    degrade to a text-only request, not abort the whole interpretation, but the
+    failure is always logged so it is never silently ignored."""
+    if not image_path.exists() or not image_path.is_file():
+        logger.warning("Image path does not exist at request time, sending text-only: %s", image_path)
+        return None, None
+
+    try:
+        size_bytes = image_path.stat().st_size
+        mime_type = _guess_image_mime_type(image_path)
+        image_file = open(image_path, "rb")
+    except OSError as exc:
+        logger.warning("Could not open image for upload, sending text-only (path=%s): %s", image_path, exc)
+        return None, None
+
+    logger.debug(
+        "Attaching image to Backboard request: path=%s size_bytes=%d mime_type=%s",
+        image_path, size_bytes, mime_type,
+    )
+    return {"files": (image_path.name, image_file, mime_type)}, image_file
 
 
 def _post_thread_message(data: dict, image_path: Path | None, config) -> dict:
@@ -100,8 +139,7 @@ def _post_thread_message(data: dict, image_path: Path | None, config) -> dict:
     files = None
     image_file = None
     if image_path is not None:
-        image_file = open(image_path, "rb")
-        files = {"files": (image_path.name, image_file, "image/jpeg")}
+        files, image_file = _open_image_for_upload(image_path)
 
     try:
         response = requests.post(
@@ -113,10 +151,15 @@ def _post_thread_message(data: dict, image_path: Path | None, config) -> dict:
         )
         response.raise_for_status()
     except requests.RequestException as exc:
+        if files is not None:
+            logger.warning("Backboard request failed while an image was attached (path=%s): %s", image_path, exc)
         raise BackboardError(f"Backboard request failed: {exc}") from exc
     finally:
         if image_file is not None:
             image_file.close()
+
+    if image_path is not None:
+        logger.debug("Image upload attached successfully: %s", files is not None)
 
     payload = response.json()
     content = payload.get("content")

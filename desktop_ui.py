@@ -727,9 +727,9 @@ class DesktopUI:
 
         if camera_notice:
             context = camera_notice
-        elif result.image_relevance == "relevant" or result.visual_context_used:
+        elif result.visual_context_used:
             context = "Relevant and used\nThe image contributed to this interpretation."
-        elif result.image_relevance == "not_relevant" or result.image_captured:
+        elif result.image_captured:
             context = "Inspected, not used\nThe image did not add useful context this time."
         else:
             context = "Unavailable\nThis interpretation used speech only."

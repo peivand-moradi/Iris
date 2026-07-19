@@ -33,6 +33,7 @@ class Config:
     mic_sample_rate: int
     backboard_base_url: str
     request_timeout_seconds: int
+    log_level: str
 
 
 def _bool(value: str) -> bool:
@@ -71,4 +72,5 @@ def load_config() -> Config:
         mic_sample_rate=int(os.getenv("MIC_SAMPLE_RATE", "16000")),
         backboard_base_url=os.getenv("BACKBOARD_BASE_URL", "https://app.backboard.io/api"),
         request_timeout_seconds=int(os.getenv("REQUEST_TIMEOUT_SECONDS", "30")),
+        log_level=os.getenv("LOG_LEVEL", "INFO"),
     )

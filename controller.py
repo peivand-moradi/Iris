@@ -44,7 +44,6 @@ def _error_result(
         certainty="low",
         alternative=None,
         visual_context_used=False,
-        image_relevance="unavailable",
         spoken_summary="",
         thread_id=thread_id,
         success=False,

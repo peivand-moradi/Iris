@@ -1,6 +1,6 @@
 import re
 
-from models import ALLOWED_CERTAINTY, ALLOWED_IMAGE_RELEVANCE, InterpretationResult
+from models import ALLOWED_CERTAINTY, InterpretationResult
 
 _FALLBACK_MESSAGE = (
     "The meaning is unclear from the available context. "
@@ -11,9 +11,7 @@ _MAX_FIELD_LENGTH = 1000
 _MAX_SPOKEN_SUMMARY_LENGTH = 400
 _PERCENTAGE_PATTERN = re.compile(r"\d{1,3}\s*%")
 
-_REQUIRED_STRING_FIELDS = (
-    "heard", "possible_meaning", "why", "spoken_summary", "image_relevance", "visual_description",
-)
+_REQUIRED_STRING_FIELDS = ("heard", "possible_meaning", "why", "spoken_summary", "visual_description")
 
 
 def validate_interpretation(
@@ -44,9 +42,6 @@ def validate_interpretation(
     if raw["certainty"] not in ALLOWED_CERTAINTY:
         return _fallback(thread_id, "Invalid certainty value in model output")
 
-    if raw["image_relevance"] not in ALLOWED_IMAGE_RELEVANCE:
-        return _fallback(thread_id, "Invalid image_relevance value in model output")
-
     if not isinstance(raw["visual_context_used"], bool):
         return _fallback(thread_id, "visual_context_used was not a boolean")
 
@@ -70,10 +65,9 @@ def validate_interpretation(
         alternative=alternative,
         visual_context_used=raw["visual_context_used"],
         spoken_summary=raw["spoken_summary"],
+        visual_description=raw["visual_description"],
         thread_id=thread_id,
         success=True,
-        image_relevance=raw["image_relevance"],
-        visual_description=raw["visual_description"],
     )
 
 
@@ -88,7 +82,5 @@ def _fallback(thread_id: str, error: str | None) -> InterpretationResult:
         spoken_summary=_FALLBACK_MESSAGE,
         thread_id=thread_id,
         success=False,
-        image_relevance="unavailable",
-        visual_description="",
         error=error,
     )

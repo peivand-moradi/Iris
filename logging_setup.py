@@ -6,7 +6,7 @@ _EVENTS_LOGGER_NAME = "iris.events"
 _FORBIDDEN_KEYS = {"audio", "image", "transcript", "transcript_text", "raw", "text", "api_key", "secret"}
 
 
-def configure_logging(level: int = logging.INFO) -> None:
+def configure_logging(level: int | str = logging.INFO) -> None:
     logging.basicConfig(
         level=level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",

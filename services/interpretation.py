@@ -53,14 +53,13 @@ def _mock_interpretation(
         why="[mock] Placeholder response — set BACKBOARD_API_KEY and BACKBOARD_ASSISTANT_ID to connect a real model.",
         certainty="low",
         alternative=None,
-        visual_context_used=image_path is not None,
-        image_relevance="relevant" if image_path is not None else "unavailable",
+        visual_context_used=False,
+        spoken_summary="This is only a placeholder result.",
         visual_description=(
             "[mock] A placeholder scene description would appear here."
             if image_path is not None
             else "No image was available."
         ),
-        spoken_summary="This is only a placeholder result.",
         thread_id=thread_id,
         success=True,
     )

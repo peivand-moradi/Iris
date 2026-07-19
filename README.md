@@ -251,8 +251,9 @@ python scripts/smoke_test_gpio_button.py        # confirms a physical button pre
 python -m pytest tests/ -v
 ```
 
-The suite (84 tests) covers output validation (including the `image_relevance`
-enum), config loading, camera fallback/provider-selection — including the
+The suite (91 tests) covers output validation, image MIME-type detection and
+graceful text-only fallback when an image can't be attached, config loading,
+camera fallback/provider-selection — including the
 Windows DirectShow backend selection, the capture retry loop, and a mocked
 Picamera2 for `PiCameraProvider` — the GPIO trigger (mocked `gpiozero`),
 controller locking and repeated-press rejection (including conversation
@@ -270,9 +271,9 @@ without needing hardware, network access, or API keys.
 - **Image captured but not relevant** → distinct from a camera failure: the
   photo was taken and inspected, but the model determined it didn't
   contribute to the interpretation (`image_captured=true`,
-  `visual_context_used=false`, `image_relevance="not_relevant"`). The UI
-  shows "Image captured and inspected, but it did not contribute to this
-  interpretation" instead of the camera-unavailable message.
+  `visual_context_used=false`). The UI shows "Image captured and inspected,
+  but it did not contribute to this interpretation" instead of the
+  camera-unavailable message.
 - **No recent speech / silence** → a clear retry message; nothing is sent to
   ElevenLabs or Backboard.
 - **Network/API failure** (auth, timeout, rate limit, connection) → a safe

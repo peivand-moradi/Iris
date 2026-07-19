@@ -7,9 +7,8 @@ VALID = {
     "certainty": "medium",
     "alternative": "They may genuinely enjoy rainy weather.",
     "visual_context_used": True,
-    "image_relevance": "relevant",
-    "visual_description": "A person stands near a window with visible rain outside.",
     "spoken_summary": "They may be joking, but that is not certain.",
+    "visual_description": "A person stands near a window with visible rain outside.",
 }
 
 
@@ -19,7 +18,7 @@ def test_valid_output_passes_through():
     assert result.possible_meaning == VALID["possible_meaning"]
     assert result.certainty == "medium"
     assert result.thread_id == "t1"
-    assert result.image_relevance == "relevant"
+    assert result.visual_context_used is True
     assert result.visual_description == VALID["visual_description"]
 
 
@@ -54,19 +53,6 @@ def test_invalid_certainty_produces_fallback():
     raw = {**VALID, "certainty": "very-high"}
     result = validate_interpretation(raw, thread_id="t1")
     assert not result.success
-
-
-def test_invalid_image_relevance_produces_fallback():
-    raw = {**VALID, "image_relevance": "somewhat"}
-    result = validate_interpretation(raw, thread_id="t1")
-    assert not result.success
-
-
-def test_missing_image_relevance_produces_fallback():
-    raw = {k: v for k, v in VALID.items() if k != "image_relevance"}
-    result = validate_interpretation(raw, thread_id="t1")
-    assert not result.success
-    assert "image_relevance" in result.error
 
 
 def test_empty_possible_meaning_produces_fallback():

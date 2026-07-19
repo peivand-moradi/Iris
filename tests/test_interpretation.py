@@ -12,6 +12,21 @@ def test_mock_mode_used_when_credentials_missing(monkeypatch):
     assert "mock" in result.possible_meaning.lower()
 
 
+def test_mock_mode_does_not_falsely_claim_visual_context_used(monkeypatch, tmp_path):
+    """The mock placeholder never actually looks at the image, so it must not
+    claim visual_context_used=True just because an image happened to be captured."""
+    monkeypatch.setattr("services.interpretation.load_config", lambda: _FakeConfig(api_key="", assistant_id=""))
+
+    fake_image = tmp_path / "capture.jpg"
+    fake_image.write_bytes(b"fake")
+
+    transcript = TranscriptResult(text="Nice weather we're having.", audio_events=[], success=True)
+    result = interpretation.interpret_context(transcript, image_path=fake_image, thread_id="t1")
+
+    assert result.success
+    assert result.visual_context_used is False
+
+
 def test_real_path_used_when_credentials_present(monkeypatch):
     monkeypatch.setattr(
         "services.interpretation.load_config", lambda: _FakeConfig(api_key="key", assistant_id="asst-1")
@@ -25,7 +40,6 @@ def test_real_path_used_when_credentials_present(monkeypatch):
             "certainty": "high",
             "alternative": None,
             "visual_context_used": False,
-            "image_relevance": "unavailable",
             "visual_description": "No image was available.",
             "spoken_summary": "real summary",
         },

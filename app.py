@@ -206,7 +206,7 @@ class App:
 
 
 def main() -> None:
-    configure_logging()
+    configure_logging(load_config().log_level)
     App().run()
 
 
