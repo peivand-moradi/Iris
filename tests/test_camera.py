@@ -1,3 +1,4 @@
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -6,7 +7,13 @@ import cv2
 import numpy as np
 import pytest
 
-from camera import LaptopCameraProvider, PiCameraProvider, SampleImageProvider, get_camera_provider
+from camera import (
+    LaptopCameraProvider,
+    PiCameraProvider,
+    PiRemoteCameraProvider,
+    SampleImageProvider,
+    get_camera_provider,
+)
 
 
 def test_sample_image_provider_missing_file_returns_none(tmp_path):
@@ -102,6 +109,7 @@ def test_get_camera_provider_returns_matching_types():
     assert isinstance(get_camera_provider("laptop"), LaptopCameraProvider)
     assert isinstance(get_camera_provider("sample"), SampleImageProvider)
     assert isinstance(get_camera_provider("pi"), PiCameraProvider)
+    assert isinstance(get_camera_provider("pi-remote"), PiRemoteCameraProvider)
 
 
 def test_laptop_camera_provider_capture_failure_returns_none_without_raising(monkeypatch):
@@ -214,4 +222,76 @@ def test_laptop_camera_provider_gives_up_after_max_attempts(monkeypatch):
     monkeypatch.setattr("camera.time.sleep", lambda seconds: None)
 
     provider = LaptopCameraProvider(camera_index=0)
+    assert provider.capture() is None
+
+
+def _completed(returncode=0, stderr=b""):
+    return subprocess.CompletedProcess(args=[], returncode=returncode, stderr=stderr)
+
+
+def test_pi_remote_camera_provider_capture_success(monkeypatch):
+    calls = []
+
+    def fake_run(args, capture_output, timeout):
+        calls.append(args)
+        if args[0] == "scp":
+            local_path = args[2]
+            cv2.imwrite(local_path, np.zeros((10, 10, 3), dtype="uint8"))
+        return _completed(returncode=0)
+
+    monkeypatch.setattr("camera.subprocess.run", fake_run)
+
+    provider = PiRemoteCameraProvider(host="iris@iris.local")
+    result = provider.capture()
+
+    assert result is not None
+    assert result.exists()
+    assert calls[0][0] == "ssh"
+    assert calls[1][0] == "scp"
+    assert calls[2][0] == "ssh"
+    assert calls[2][1] == "iris@iris.local"
+    assert calls[2][2].startswith("rm -f ")
+
+
+def test_pi_remote_camera_provider_returns_none_when_ssh_capture_fails(monkeypatch):
+    def fake_run(args, capture_output, timeout):
+        if args[0] == "ssh" and args[2].startswith("rpicam-still"):
+            return _completed(returncode=1, stderr=b"no cameras available")
+        return _completed(returncode=0)
+
+    monkeypatch.setattr("camera.subprocess.run", fake_run)
+
+    provider = PiRemoteCameraProvider(host="iris@iris.local")
+    assert provider.capture() is None
+
+
+def test_pi_remote_camera_provider_returns_none_when_scp_transfer_fails(monkeypatch):
+    def fake_run(args, capture_output, timeout):
+        if args[0] == "scp":
+            return _completed(returncode=1, stderr=b"lost connection")
+        return _completed(returncode=0)
+
+    monkeypatch.setattr("camera.subprocess.run", fake_run)
+
+    provider = PiRemoteCameraProvider(host="iris@iris.local")
+    assert provider.capture() is None
+
+
+def test_pi_remote_camera_provider_returns_none_on_timeout(monkeypatch):
+    def fake_run(args, capture_output, timeout):
+        raise subprocess.TimeoutExpired(cmd=args, timeout=timeout)
+
+    monkeypatch.setattr("camera.subprocess.run", fake_run)
+
+    provider = PiRemoteCameraProvider(host="iris@iris.local")
+    assert provider.capture() is None
+
+
+def test_pi_remote_camera_provider_returns_none_when_ssh_binary_missing(monkeypatch):
+    def fake_run(args, capture_output, timeout):
+        raise FileNotFoundError("ssh not found")
+
+    monkeypatch.setattr("camera.subprocess.run", fake_run)
+
+    provider = PiRemoteCameraProvider(host="iris@iris.local")
     assert provider.capture() is None

@@ -1,6 +1,8 @@
 import logging
 import platform
+import subprocess
 import time
+import uuid
 from pathlib import Path
 from typing import Protocol
 
@@ -17,6 +19,8 @@ _WARMUP_FRAMES = 3  # discard a few frames so exposure/white-balance can settle
 _MAX_CAPTURE_ATTEMPTS = 10
 _CAPTURE_RETRY_DELAY_SECONDS = 0.1
 _PI_WARMUP_SECONDS = 1.0  # let Picamera2's auto-exposure/white-balance settle
+_PI_REMOTE_CAPTURE_TIMEOUT_MS = 1000  # rpicam-still warmup on the remote Pi
+_PI_REMOTE_SSH_TIMEOUT_SECONDS = 15  # per ssh/scp call, covers a cold Pi/network hiccup
 
 
 class CameraProvider(Protocol):
@@ -148,6 +152,77 @@ class PiCameraProvider:
             picam2.close()
 
 
+class PiRemoteCameraProvider:
+    """Task 13 (laptop-mic variant): Pi Camera as a remote peripheral.
+
+    Iris keeps running on the laptop (laptop mic, Tkinter UI, software
+    button all unchanged); only the image comes from the Pi. Captures a
+    still with `rpicam-still` over `ssh`, then pulls the JPEG back with
+    `scp`. Requires key-based SSH auth to `host` — a password prompt would
+    hang here since nothing reads stdin.
+    """
+
+    def __init__(self, host: str) -> None:
+        self.host = host
+
+    def capture(self) -> Path | None:
+        remote_path = f"/tmp/iris_capture_{uuid.uuid4().hex}.jpg"
+        try:
+            capture_result = subprocess.run(
+                [
+                    "ssh",
+                    self.host,
+                    f"rpicam-still -o {remote_path} -n "
+                    f"--width {_CAPTURE_WIDTH} --height {_CAPTURE_HEIGHT} "
+                    f"--timeout {_PI_REMOTE_CAPTURE_TIMEOUT_MS}",
+                ],
+                capture_output=True,
+                timeout=_PI_REMOTE_SSH_TIMEOUT_SECONDS,
+            )
+            if capture_result.returncode != 0:
+                logger.warning(
+                    "Pi remote capture failed (host=%s): %s",
+                    self.host,
+                    capture_result.stderr.decode(errors="replace").strip(),
+                )
+                return None
+
+            local_path = new_temp_path(".jpg")
+            transfer_result = subprocess.run(
+                ["scp", f"{self.host}:{remote_path}", str(local_path)],
+                capture_output=True,
+                timeout=_PI_REMOTE_SSH_TIMEOUT_SECONDS,
+            )
+            if transfer_result.returncode != 0:
+                logger.warning(
+                    "Failed to transfer Pi Camera image over scp (host=%s): %s",
+                    self.host,
+                    transfer_result.stderr.decode(errors="replace").strip(),
+                )
+                return None
+
+            if cv2.imread(str(local_path)) is None:
+                logger.warning("Transferred Pi Camera JPEG could not be decoded")
+                return None
+
+            return local_path
+        except subprocess.TimeoutExpired:
+            logger.warning("Pi remote capture timed out (host=%s)", self.host)
+            return None
+        except FileNotFoundError:
+            logger.warning("ssh/scp not found on this machine")
+            return None
+        finally:
+            try:
+                subprocess.run(
+                    ["ssh", self.host, f"rm -f {remote_path}"],
+                    capture_output=True,
+                    timeout=_PI_REMOTE_SSH_TIMEOUT_SECONDS,
+                )
+            except Exception:
+                pass
+
+
 def get_camera_provider(mode: str) -> CameraProvider:
     config = load_config()
 
@@ -155,6 +230,7 @@ def get_camera_provider(mode: str) -> CameraProvider:
         "laptop": lambda: LaptopCameraProvider(config.camera_index),
         "sample": SampleImageProvider,
         "pi": PiCameraProvider,
+        "pi-remote": lambda: PiRemoteCameraProvider(config.pi_ssh_host),
     }
 
     if mode not in providers:

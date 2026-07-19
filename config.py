@@ -21,6 +21,7 @@ class Config:
     mic_device_index: int | None
     camera_mode: str
     camera_index: int
+    pi_ssh_host: str
     trigger_mode: str
     gpio_button_pin: int
     tts_enabled: bool
@@ -56,6 +57,7 @@ def load_config() -> Config:
         mic_device_index=_optional_int(os.getenv("MIC_DEVICE_INDEX", "")),
         camera_mode=os.getenv("CAMERA_MODE", "laptop"),
         camera_index=int(os.getenv("CAMERA_INDEX", "0")),
+        pi_ssh_host=os.getenv("PI_SSH_HOST", "iris@iris.local"),
         trigger_mode=os.getenv("TRIGGER_MODE", "software"),
         gpio_button_pin=int(os.getenv("GPIO_BUTTON_PIN", "17")),
         tts_enabled=_bool(os.getenv("TTS_ENABLED", "false")),
