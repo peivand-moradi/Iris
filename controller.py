@@ -6,8 +6,8 @@ import audio
 from camera import get_camera_provider
 from config import load_config
 from logging_setup import log_event
-from models import InterpretationResult
-from services import interpretation
+from models import ConversationTurnResult, InterpretationResult
+from services import conversation, interpretation
 from services.elevenlabs_client import transcribe_audio
 from tempfiles import cleanup as cleanup_temp_file
 
@@ -16,6 +16,7 @@ LISTENING = "LISTENING"
 CAPTURING = "CAPTURING"
 PROCESSING = "PROCESSING"
 RESULT = "RESULT"
+CONVERSATION = "CONVERSATION"
 ERROR = "ERROR"
 
 
@@ -183,3 +184,96 @@ def run_interpretation(
         cleanup_temp_file(audio_path)
         cleanup_temp_file(image_path)
         _lock.release()
+
+
+def _conversation_error_result(
+    message: str,
+    thread_id: str = "",
+    history: list[tuple[str, str]] | None = None,
+) -> ConversationTurnResult:
+    return ConversationTurnResult(
+        message=message,
+        conversation_over=True,
+        thread_id=thread_id,
+        history=history or [],
+        success=False,
+        error=message,
+    )
+
+
+def start_conversation(interpretation_result: InterpretationResult) -> ConversationTurnResult:
+    """Acquire the shared lock for the whole conversation — released only by
+    end_conversation(), which MUST be called exactly once for every
+    start_conversation() call, regardless of outcome. Holding the lock for the
+    conversation's duration (not per turn) keeps a stray GPIO/software
+    interpretation press from racing the shared mic buffer/camera while a
+    conversation is live — it fails cleanly via the same "already being
+    processed" path a concurrent interpretation press already gets."""
+    log_event("conversation_started")
+
+    if not _lock.acquire(blocking=False):
+        return _conversation_error_result(
+            "A request is already being processed. Please wait for the current result."
+        )
+
+    try:
+        result = conversation.start_conversation(interpretation_result)
+        log_event("conversation_turn_received", success=result.success, opening=True)
+        return result
+    except Exception as exc:
+        log_event("conversation_turn_received", success=False, error=str(exc))
+        return _conversation_error_result("The conversation service is unavailable right now.")
+
+
+def continue_conversation(thread_id: str, history: list[tuple[str, str]]) -> ConversationTurnResult:
+    """Caller must already hold the lock via start_conversation(). Reuses
+    audio.get_recent_audio() + transcribe_audio() exactly as run_interpretation()
+    does — no new capture primitive."""
+    audio_path = audio.get_recent_audio()
+    log_event("conversation_audio_saved", success=audio_path is not None)
+
+    if audio_path is None:
+        return _conversation_error_result(
+            "No recent speech was captured. Please try answering again.",
+            thread_id=thread_id,
+            history=history,
+        )
+
+    try:
+        transcript = transcribe_audio(audio_path)
+    except Exception as exc:
+        log_event("conversation_transcript_received", success=False, error=str(exc))
+        return _conversation_error_result(
+            "Speech could not be transcribed right now.", thread_id=thread_id, history=history
+        )
+    finally:
+        cleanup_temp_file(audio_path)
+
+    if not transcript.success or not transcript.text.strip():
+        return _conversation_error_result(
+            transcript.error or "No understandable speech was detected.",
+            thread_id=thread_id,
+            history=history,
+        )
+
+    try:
+        result = conversation.continue_conversation(transcript.text, thread_id, history)
+    except Exception as exc:
+        log_event("conversation_turn_received", success=False, error=str(exc))
+        return _conversation_error_result(
+            "The conversation service is unavailable right now.", thread_id=thread_id, history=history
+        )
+
+    log_event(
+        "conversation_turn_received",
+        success=result.success,
+        conversation_over=result.conversation_over,
+    )
+    return result
+
+
+def end_conversation() -> None:
+    """Release the lock acquired by start_conversation(). Must be called
+    exactly once per start_conversation() call."""
+    log_event("conversation_ended")
+    _lock.release()

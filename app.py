@@ -19,7 +19,7 @@ class App:
         self.ui = DesktopUI(
             self.root,
             on_interpret=self.trigger_interpretation,
-            on_hear_result=self.trigger_hear_result,
+            on_hear_result=self.trigger_conversation,
             on_dismiss=self.dismiss,
         )
         self.root.protocol("WM_DELETE_WINDOW", self.shutdown)
@@ -28,6 +28,7 @@ class App:
         self._init_microphone()
         self._init_camera_status()
         self._gpio_trigger = self._init_trigger()
+        self._conversation_stop_event: threading.Event | None = None
 
         self.ui.set_state(controller.LISTENING)
 
@@ -73,6 +74,9 @@ class App:
             self.ui.set_camera_status("ready")
 
     def trigger_interpretation(self) -> None:
+        if self._conversation_stop_event is not None:
+            log_event("button_pressed", ignored="conversation_active")
+            return
         threading.Thread(target=self._run_interpretation, daemon=True).start()
 
     def _run_interpretation(self) -> None:
@@ -113,10 +117,39 @@ class App:
                 result.error or "Something went wrong. Please try again.",
             )
 
-    def trigger_hear_result(self) -> None:
-        text = self.ui.get_spoken_summary()
-        if text:
-            threading.Thread(target=self._speak, args=(text,), daemon=True).start()
+    def trigger_conversation(self) -> None:
+        if self._conversation_stop_event is not None:
+            return
+        interpretation_result = self.ui.get_last_result()
+        if interpretation_result is None:
+            return
+        self._conversation_stop_event = threading.Event()
+        threading.Thread(
+            target=self._run_conversation, args=(interpretation_result,), daemon=True
+        ).start()
+
+    def _run_conversation(self, interpretation_result) -> None:
+        stop_event = self._conversation_stop_event
+        self.root.after(0, self.ui.set_state, controller.CONVERSATION)
+
+        turn = controller.start_conversation(interpretation_result)
+        try:
+            while True:
+                if turn.message:
+                    self.root.after(0, self.ui.set_conversation_line, turn.message)
+                    self._speak(turn.message)
+
+                if not turn.success or turn.conversation_over or stop_event.is_set():
+                    break
+
+                if stop_event.wait(timeout=self.config.conversation_answer_wait_seconds):
+                    break  # Dismiss was pressed during the wait
+
+                turn = controller.continue_conversation(turn.thread_id, turn.history)
+        finally:
+            controller.end_conversation()
+            self._conversation_stop_event = None
+            self.root.after(0, self.ui.reset)
 
     def _speak(self, text: str) -> None:
         import playback
@@ -128,9 +161,14 @@ class App:
         log_event("tts_finished", played=played)
 
     def dismiss(self) -> None:
+        if self._conversation_stop_event is not None:
+            self._conversation_stop_event.set()
+            return
         self.ui.reset()
 
     def shutdown(self) -> None:
+        if self._conversation_stop_event is not None:
+            self._conversation_stop_event.set()
         try:
             audio.stop_audio_stream()
         except Exception:

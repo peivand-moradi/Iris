@@ -10,6 +10,7 @@ load_dotenv()
 class Config:
     backboard_api_key: str
     backboard_assistant_id: str
+    backboard_conversation_assistant_id: str
     backboard_provider: str
     backboard_model: str
     elevenlabs_api_key: str
@@ -18,6 +19,7 @@ class Config:
     elevenlabs_voice_id: str
     audio_buffer_seconds: int
     capture_seconds: int
+    conversation_answer_wait_seconds: int
     mic_device_index: int | None
     camera_mode: str
     camera_index: int
@@ -46,6 +48,7 @@ def load_config() -> Config:
     return Config(
         backboard_api_key=os.getenv("BACKBOARD_API_KEY", ""),
         backboard_assistant_id=os.getenv("BACKBOARD_ASSISTANT_ID", ""),
+        backboard_conversation_assistant_id=os.getenv("BACKBOARD_CONVERSATION_ASSISTANT_ID", ""),
         backboard_provider=os.getenv("BACKBOARD_PROVIDER", ""),
         backboard_model=os.getenv("BACKBOARD_MODEL", ""),
         elevenlabs_api_key=os.getenv("ELEVENLABS_API_KEY", ""),
@@ -54,6 +57,7 @@ def load_config() -> Config:
         elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID", ""),
         audio_buffer_seconds=int(os.getenv("AUDIO_BUFFER_SECONDS", "10")),
         capture_seconds=int(os.getenv("CAPTURE_SECONDS", "10")),
+        conversation_answer_wait_seconds=int(os.getenv("CONVERSATION_ANSWER_WAIT_SECONDS", "4")),
         mic_device_index=_optional_int(os.getenv("MIC_DEVICE_INDEX", "")),
         camera_mode=os.getenv("CAMERA_MODE", "laptop"),
         camera_index=int(os.getenv("CAMERA_INDEX", "0")),

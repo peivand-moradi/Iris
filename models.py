@@ -24,5 +24,16 @@ class InterpretationResult:
     thread_id: str
     success: bool
     image_relevance: str = "unavailable"
+    visual_description: str = ""
     error: str | None = None
     image_captured: bool = False
+
+
+@dataclass
+class ConversationTurnResult:
+    message: str
+    conversation_over: bool
+    thread_id: str
+    history: list[tuple[str, str]]  # ("iris" | "user", text) pairs, oldest first
+    success: bool
+    error: str | None = None

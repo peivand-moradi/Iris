@@ -11,7 +11,9 @@ _MAX_FIELD_LENGTH = 1000
 _MAX_SPOKEN_SUMMARY_LENGTH = 400
 _PERCENTAGE_PATTERN = re.compile(r"\d{1,3}\s*%")
 
-_REQUIRED_STRING_FIELDS = ("heard", "possible_meaning", "why", "spoken_summary", "image_relevance")
+_REQUIRED_STRING_FIELDS = (
+    "heard", "possible_meaning", "why", "spoken_summary", "image_relevance", "visual_description",
+)
 
 
 def validate_interpretation(
@@ -71,6 +73,7 @@ def validate_interpretation(
         thread_id=thread_id,
         success=True,
         image_relevance=raw["image_relevance"],
+        visual_description=raw["visual_description"],
     )
 
 
@@ -86,5 +89,6 @@ def _fallback(thread_id: str, error: str | None) -> InterpretationResult:
         thread_id=thread_id,
         success=False,
         image_relevance="unavailable",
+        visual_description="",
         error=error,
     )

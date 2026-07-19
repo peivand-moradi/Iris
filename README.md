@@ -47,6 +47,10 @@ Laptop camera / sample image ─────────────────
   interface; routes to a mock when credentials are absent.
 - `services/output_validator.py` — validates/normalizes model output and
   produces a safe fallback on anything malformed.
+- `services/conversation.py` / `services/conversation_validator.py` — the
+  "Let's talk about it" spoken follow-up conversation (see "Conversation
+  mode" below): a separate Backboard assistant/prompt, same
+  mock-when-unconfigured and validate-or-fallback philosophy as interpretation.
 - `tempfiles.py` / `logging_setup.py` / `playback.py` — small shared
   utilities for temp-file cleanup, sanitized event logging, and local audio
   playback (WAV, so it also works via `winsound` on Windows).
@@ -79,6 +83,7 @@ Then fill in `.env` (see "Environment variables" below).
 |---|---|---|
 | `BACKBOARD_API_KEY` | real interpretation | see "Backboard setup" |
 | `BACKBOARD_ASSISTANT_ID` | real interpretation | see "Backboard setup" |
+| `BACKBOARD_CONVERSATION_ASSISTANT_ID` | real conversation mode | see "Conversation mode" |
 | `BACKBOARD_PROVIDER` | optional | e.g. `openai`; left blank uses Backboard's default (vision-capable) model |
 | `BACKBOARD_MODEL` | optional | e.g. `gpt-4o`; left blank uses Backboard's default |
 | `ELEVENLABS_API_KEY` | real transcription/TTS | see "ElevenLabs setup" |
@@ -87,6 +92,7 @@ Then fill in `.env` (see "Environment variables" below).
 | `ELEVENLABS_VOICE_ID` | spoken output | required only if `TTS_ENABLED=true` |
 | `AUDIO_BUFFER_SECONDS` | — | rolling buffer length, default `10` |
 | `CAPTURE_SECONDS` | — | reserved for future capture-window tuning |
+| `CONVERSATION_ANSWER_WAIT_SECONDS` | — | conversation mode reply wait, default `6` |
 | `CAMERA_MODE` | — | `laptop` \| `sample` \| `pi` (Task 13, requires Raspberry Pi OS) |
 | `CAMERA_INDEX` | — | OpenCV camera index, default `0` |
 | `TTS_ENABLED` | — | `true`/`false`, default `false` |
@@ -122,6 +128,39 @@ exist.
    ```
    It prints an `assistant_id` — copy it into `BACKBOARD_ASSISTANT_ID`.
 3. Run `python scripts/smoke_test_backboard.py` to confirm end-to-end.
+
+## Conversation mode
+
+Pressing **"Let's talk about it"** after a result starts a brief, entirely
+spoken back-and-forth about that interpretation, driven by a **second**
+Backboard assistant (`BACKBOARD_CONVERSATION_ASSISTANT_ID`, its own prompt at
+`prompts/conversation_system_prompt.txt`) — ElevenLabs stays STT+TTS only,
+never the model doing the conversing.
+
+Set it up the same way as the interpretation assistant:
+```bash
+python scripts/setup_conversation_assistant.py
+```
+It prints an `assistant_id` — copy it into `BACKBOARD_CONVERSATION_ASSISTANT_ID`.
+
+Unlike the one-shot interpretation flow (a brand-new Backboard thread with
+`memory=off` per button press), a conversation reuses **one** thread for all
+of its turns so the model has context of what was already asked/answered —
+each message also restates the full conversation-so-far, so this works
+regardless of what `memory=off` does server-side. This is a deliberate,
+scoped exception to the interpretation flow's privacy design; the thread is
+discarded — never revisited — once the conversation ends.
+
+Each turn: Iris speaks the model's message via TTS, waits
+`CONVERSATION_ANSWER_WAIT_SECONDS`, then captures+transcribes the reply from
+the same rolling mic buffer used everywhere else (no new capture primitive,
+no on-screen multiple-choice options — everything is spoken and answered by
+voice) and sends it back on the same thread. The conversation ends when the
+model sets `conversation_over: true`, or the user presses **Dismiss** at any
+point (ends after the current turn finishes, not instantly — the same as any
+other busy state in this app). While a conversation is active, pressing
+"Interpret recent sentence" (including the GPIO button) is ignored rather
+than raced against the shared mic/camera.
 
 ## Raspberry Pi deployment (Task 13)
 
@@ -207,12 +246,13 @@ python scripts/smoke_test_gpio_button.py        # confirms a physical button pre
 python -m pytest tests/ -v
 ```
 
-The suite (52 tests) covers output validation (including the `image_relevance`
+The suite (84 tests) covers output validation (including the `image_relevance`
 enum), config loading, camera fallback/provider-selection — including the
 Windows DirectShow backend selection, the capture retry loop, and a mocked
 Picamera2 for `PiCameraProvider` — the GPIO trigger (mocked `gpiozero`),
-controller locking and repeated-press rejection, temp-file cleanup, demo-mode
-audio selection, and mock/real routing in the interpretation service — all
+controller locking and repeated-press rejection (including conversation
+mode's shared lock), temp-file cleanup, demo-mode audio selection, and
+mock/real routing in both the interpretation and conversation services — all
 without needing hardware, network access, or API keys.
 
 ## Expected failure behavior
@@ -240,6 +280,12 @@ without needing hardware, network access, or API keys.
   confidence, non-JSON, excessive length) → the local validator falls back
   to "The meaning is unclear from the available context..." at `low`
   certainty. Raw model output is never shown.
+- **Malformed conversation-turn output, or a failed turn** (bad transcription,
+  Backboard error) → the conversation ends immediately with a safe spoken
+  closing line rather than retrying; never silent, never raw model output.
+- **"Interpret recent sentence" pressed while a conversation is active**
+  (including the GPIO button) → ignored rather than raced against the shared
+  mic/camera; logged, not shown as an error.
 - **TTS unavailable or fails** → the visual result stays fully usable; no
   blocking error.
 - **Missing sample file in demo mode** → a clear configuration error, logged
@@ -260,7 +306,9 @@ without needing hardware, network access, or API keys.
   written to the logs by default (`logging_setup.py` strips these fields
   defensively even if a caller passes them).
 - Every interpretation event uses a **new** Backboard thread; long-term
-  memory is kept off (`memory=off` on every request).
+  memory is kept off (`memory=off` on every request). Conversation mode is
+  the one deliberate, time-boxed exception: one thread persists for the
+  life of a single conversation, then is discarded and never revisited.
 - The output is only ever presented as a **possible** interpretation, never
   a claim of certainty about what someone meant.
 
@@ -282,8 +330,15 @@ without needing hardware, network access, or API keys.
   confirming a stronger same-turn "vision" guarantee beyond that, so image
   relevance can depend on the assistant choosing to use it. This is a
   documented-API limitation, not a placeholder in this codebase.
-- No voice follow-up, streaming TTS, or second-model verification — all
-  explicitly out of scope for this MVP.
+- No streaming TTS or second-model verification — out of scope for this MVP.
+- Conversation mode's listening window is a fixed wait
+  (`CONVERSATION_ANSWER_WAIT_SECONDS`), not real voice-activity detection —
+  it doesn't know when the user has actually finished answering. A failed
+  turn (bad transcription, Backboard error) ends the conversation immediately
+  rather than retrying once locally; a bounded retry would likely feel
+  better but isn't built yet. There's also a theoretical mic/speaker-bleed
+  edge case: TTS played over speakers could faintly leak into the start of
+  the next capture window on some hardware.
 
 ## Troubleshooting
 

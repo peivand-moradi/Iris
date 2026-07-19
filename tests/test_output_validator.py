@@ -8,6 +8,7 @@ VALID = {
     "alternative": "They may genuinely enjoy rainy weather.",
     "visual_context_used": True,
     "image_relevance": "relevant",
+    "visual_description": "A person stands near a window with visible rain outside.",
     "spoken_summary": "They may be joking, but that is not certain.",
 }
 
@@ -19,6 +20,20 @@ def test_valid_output_passes_through():
     assert result.certainty == "medium"
     assert result.thread_id == "t1"
     assert result.image_relevance == "relevant"
+    assert result.visual_description == VALID["visual_description"]
+
+
+def test_missing_visual_description_produces_fallback():
+    raw = {k: v for k, v in VALID.items() if k != "visual_description"}
+    result = validate_interpretation(raw, thread_id="t1")
+    assert not result.success
+    assert "visual_description" in result.error
+
+
+def test_percentage_confidence_in_visual_description_produces_fallback():
+    raw = {**VALID, "visual_description": "I am 90% sure this is an office."}
+    result = validate_interpretation(raw, thread_id="t1")
+    assert not result.success
 
 
 def test_none_raw_produces_fallback():

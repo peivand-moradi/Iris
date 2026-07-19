@@ -55,6 +55,11 @@ def _mock_interpretation(
         alternative=None,
         visual_context_used=image_path is not None,
         image_relevance="relevant" if image_path is not None else "unavailable",
+        visual_description=(
+            "[mock] A placeholder scene description would appear here."
+            if image_path is not None
+            else "No image was available."
+        ),
         spoken_summary="This is only a placeholder result.",
         thread_id=thread_id,
         success=True,
