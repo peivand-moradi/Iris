@@ -67,16 +67,26 @@ def synthesize_result(text: str) -> Path | None:
         return None
 
     try:
-        from elevenlabs.play import save
+        import wave
 
-        audio = _client().text_to_speech.convert(
+        pcm_sample_rate = 24000
+        chunks = _client().text_to_speech.convert(
             text=text,
             voice_id=config.elevenlabs_voice_id,
             model_id=config.elevenlabs_tts_model,
-            output_format="mp3_44100_128",
+            output_format=f"pcm_{pcm_sample_rate}",
         )
-        path = new_temp_path(".mp3")
-        save(audio, str(path))
+        pcm_bytes = b"".join(chunks)
+
+        # Written as a real WAV (not the raw headerless PCM ElevenLabs returns) so
+        # playback.py's afplay/aplay/winsound all get a file format they can open —
+        # winsound in particular cannot play MP3 on Windows, only WAV.
+        path = new_temp_path(".wav")
+        with wave.open(str(path), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(pcm_sample_rate)
+            wav_file.writeframes(pcm_bytes)
         return path
     except Exception as exc:
         logger.warning("ElevenLabs TTS failed: %s", exc)

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-
+# insert parent directory into sys.path so we can import config.py
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import load_config  # noqa: E402
