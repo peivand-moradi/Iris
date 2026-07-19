@@ -21,3 +21,4 @@ def test_message_content_instructs_json_only_response():
     assert "JSON object" in content
     assert '"possible_meaning"' in content
     assert '"certainty"' in content
+    assert '"image_relevance"' in content

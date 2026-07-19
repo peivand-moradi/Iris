@@ -2,8 +2,8 @@ from pathlib import Path
 
 from config import load_config
 from models import InterpretationResult, TranscriptResult
-from . import backboard_client
-from .output_validator import validate_interpretation
+from services import backboard_client
+from services.output_validator import validate_interpretation
 
 
 def _configured(config) -> bool:
@@ -54,6 +54,7 @@ def _mock_interpretation(
         certainty="low",
         alternative=None,
         visual_context_used=image_path is not None,
+        image_relevance="relevant" if image_path is not None else "unavailable",
         spoken_summary="This is only a placeholder result.",
         thread_id=thread_id,
         success=True,

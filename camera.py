@@ -16,6 +16,7 @@ _CAPTURE_HEIGHT = 720
 _WARMUP_FRAMES = 3  # discard a few frames so exposure/white-balance can settle
 _MAX_CAPTURE_ATTEMPTS = 10
 _CAPTURE_RETRY_DELAY_SECONDS = 0.1
+_PI_WARMUP_SECONDS = 1.0  # let Picamera2's auto-exposure/white-balance settle
 
 
 class CameraProvider(Protocol):
@@ -105,13 +106,46 @@ class SampleImageProvider:
 
 
 class PiCameraProvider:
-    """Interface-compatible stub. Real Picamera2 integration is out of scope."""
+    """Task 13: Raspberry Pi camera via Picamera2.
+
+    Only importable/usable on Raspberry Pi OS, where the picamera2 system
+    package (and its libcamera bindings) is installed — see requirements-pi.txt.
+    Mirrors LaptopCameraProvider's per-call open/capture/verify/close pattern
+    so the rest of the pipeline never needs to know which provider is active.
+    """
 
     def capture(self) -> Path | None:
-        raise NotImplementedError(
-            "PiCameraProvider is not implemented in this MVP. "
-            "Set CAMERA_MODE=laptop or CAMERA_MODE=sample."
-        )
+        try:
+            from picamera2 import Picamera2
+        except ImportError:
+            logger.warning(
+                "picamera2 is not installed. This provider only works on Raspberry Pi OS "
+                "with the python3-picamera2 system package (see requirements-pi.txt)."
+            )
+            return None
+
+        picam2 = Picamera2()
+        try:
+            still_config = picam2.create_still_configuration(
+                main={"size": (_CAPTURE_WIDTH, _CAPTURE_HEIGHT)}
+            )
+            picam2.configure(still_config)
+            picam2.start()
+            time.sleep(_PI_WARMUP_SECONDS)
+
+            path = new_temp_path(".jpg")
+            picam2.capture_file(str(path))
+
+            if cv2.imread(str(path)) is None:
+                logger.warning("Captured Pi Camera JPEG could not be decoded back")
+                return None
+
+            return path
+        except Exception as exc:
+            logger.warning("Pi Camera capture failed: %s", exc)
+            return None
+        finally:
+            picam2.close()
 
 
 def get_camera_provider(mode: str) -> CameraProvider:

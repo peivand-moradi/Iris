@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 ALLOWED_CERTAINTY = ("low", "medium", "high")
+ALLOWED_IMAGE_RELEVANCE = ("relevant", "not_relevant", "unavailable")
 
 
 @dataclass
@@ -22,6 +23,6 @@ class InterpretationResult:
     spoken_summary: str
     thread_id: str
     success: bool
-    image_relevance: str
+    image_relevance: str = "unavailable"
     error: str | None = None
     image_captured: bool = False

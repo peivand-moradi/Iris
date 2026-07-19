@@ -25,6 +25,7 @@ def test_real_path_used_when_credentials_present(monkeypatch):
             "certainty": "high",
             "alternative": None,
             "visual_context_used": False,
+            "image_relevance": "unavailable",
             "spoken_summary": "real summary",
         },
     )

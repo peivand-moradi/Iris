@@ -1,0 +1,15 @@
+# Raspberry Pi deployment (Task 13) — see README's "Raspberry Pi deployment" section.
+#
+# picamera2 is deliberately NOT listed here: it wraps system libcamera
+# bindings that only exist via apt on Raspberry Pi OS and cannot be
+# installed from PyPI on any other platform. Install it system-wide first
+# (sudo apt install python3-picamera2), then create this venv with
+# --system-site-packages so it can see the system-installed package:
+#
+#   sudo apt install -y python3-picamera2 python3-libcamera
+#   python3 -m venv --system-site-packages .venv
+#   source .venv/bin/activate
+#   pip install -r requirements-pi.txt
+
+-r requirements.txt
+gpiozero>=2.0

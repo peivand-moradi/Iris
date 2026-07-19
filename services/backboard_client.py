@@ -61,8 +61,8 @@ def _build_message_content(transcript: str, audio_events: list[str]) -> str:
     lines.append(
         "Respond with a single JSON object only, no surrounding prose, using exactly these keys: "
         '"heard", "possible_meaning", "why", "certainty" (one of "low", "medium", "high"), '
-        '"alternative" (string or null), "visual_context_used" (true/false), "spoken_summary" '
-        "(one short sentence)."
+        '"alternative" (string or null), "visual_context_used" (true/false), "image_relevance" '
+        '(one of "relevant", "not_relevant", "unavailable"), "spoken_summary" (one short sentence).'
     )
     return "\n".join(lines)
 
@@ -93,7 +93,6 @@ def send_interpretation_request(
     if image_path is not None:
         image_file = open(image_path, "rb")
         files = {"files": (image_path.name, image_file, "image/jpeg")}
-        print(files)
 
     try:
         response = requests.post(

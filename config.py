@@ -18,8 +18,11 @@ class Config:
     elevenlabs_voice_id: str
     audio_buffer_seconds: int
     capture_seconds: int
+    mic_device_index: int | None
     camera_mode: str
     camera_index: int
+    trigger_mode: str
+    gpio_button_pin: int
     tts_enabled: bool
     demo_mode: bool
     sample_audio_path: str
@@ -31,6 +34,11 @@ class Config:
 
 def _bool(value: str) -> bool:
     return value.strip().lower() in ("1", "true", "yes")
+
+
+def _optional_int(value: str) -> int | None:
+    value = value.strip()
+    return int(value) if value else None
 
 
 def load_config() -> Config:
@@ -45,8 +53,11 @@ def load_config() -> Config:
         elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID", ""),
         audio_buffer_seconds=int(os.getenv("AUDIO_BUFFER_SECONDS", "10")),
         capture_seconds=int(os.getenv("CAPTURE_SECONDS", "10")),
+        mic_device_index=_optional_int(os.getenv("MIC_DEVICE_INDEX", "")),
         camera_mode=os.getenv("CAMERA_MODE", "laptop"),
         camera_index=int(os.getenv("CAMERA_INDEX", "0")),
+        trigger_mode=os.getenv("TRIGGER_MODE", "software"),
+        gpio_button_pin=int(os.getenv("GPIO_BUTTON_PIN", "17")),
         tts_enabled=_bool(os.getenv("TTS_ENABLED", "false")),
         demo_mode=_bool(os.getenv("DEMO_MODE", "false")),
         sample_audio_path=os.getenv("SAMPLE_AUDIO_PATH", "samples/audio/sample.wav"),

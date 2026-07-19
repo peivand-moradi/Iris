@@ -6,9 +6,10 @@ recent audio window and the immediate scene into a careful, brief possible
 interpretation — never a claim about what the speaker "really" meant, and
 never a diagnosis of emotion, disability, or intent.
 
-This is the laptop-first MVP: a local Tkinter application, no browser, no web
-server. Raspberry Pi / Picamera2 / GPIO integration is the next stage and has
-**not** been started in this repository.
+This is a local Tkinter application, no browser, no web server. The laptop
+workflow (Tasks 1–12) is the first milestone; Raspberry Pi 5 / Picamera2 /
+GPIO integration (Task 13) builds on it without changing the AI pipeline —
+see "Raspberry Pi deployment" below.
 
 ## Architecture overview
 
@@ -28,13 +29,16 @@ Laptop camera / sample image ─────────────────
 
 - `app.py` — Tkinter entry point and lifecycle (`App` class).
 - `controller.py` — the state machine and the single `run_interpretation()`
-  entry point every trigger (software button today, GPIO later) must call.
+  entry point every trigger (software button, and the GPIO button on the
+  Pi) must call.
 - `desktop_ui.py` — the one Tkinter window (`DesktopUI`). The controller never
   touches individual widgets directly.
 - `audio.py` — the rolling microphone buffer (`RollingAudioBuffer`) and
   `get_recent_audio()`.
 - `camera.py` — replaceable `CameraProvider`s: `LaptopCameraProvider`,
-  `SampleImageProvider`, and a `PiCameraProvider` stub (not implemented).
+  `SampleImageProvider`, and `PiCameraProvider` (Task 13, Picamera2-backed).
+- `trigger.py` — `GPIOButtonTrigger` (Task 13): calls the same
+  `run_interpretation()` path the software button uses.
 - `services/elevenlabs_client.py` — Scribe v2 transcription and TTS, isolated
   behind `transcribe_audio()` / `synthesize_result()`.
 - `services/backboard_client.py` — all Backboard-specific REST calls
@@ -44,8 +48,8 @@ Laptop camera / sample image ─────────────────
 - `services/output_validator.py` — validates/normalizes model output and
   produces a safe fallback on anything malformed.
 - `tempfiles.py` / `logging_setup.py` / `playback.py` — small shared
-  utilities for temp-file cleanup, sanitized event logging, and local MP3
-  playback.
+  utilities for temp-file cleanup, sanitized event logging, and local audio
+  playback (WAV, so it also works via `winsound` on Windows).
 - `scripts/` — one-off setup and smoke-test scripts (see below).
 - `tests/` — pytest suite (no network/hardware required).
 
@@ -83,7 +87,7 @@ Then fill in `.env` (see "Environment variables" below).
 | `ELEVENLABS_VOICE_ID` | spoken output | required only if `TTS_ENABLED=true` |
 | `AUDIO_BUFFER_SECONDS` | — | rolling buffer length, default `10` |
 | `CAPTURE_SECONDS` | — | reserved for future capture-window tuning |
-| `CAMERA_MODE` | — | `laptop` \| `sample` \| `pi` (stub only) |
+| `CAMERA_MODE` | — | `laptop` \| `sample` \| `pi` (Task 13, requires Raspberry Pi OS) |
 | `CAMERA_INDEX` | — | OpenCV camera index, default `0` |
 | `TTS_ENABLED` | — | `true`/`false`, default `false` |
 | `DEMO_MODE` | — | `true`/`false`, default `false` — see "Demo mode" |
@@ -119,6 +123,47 @@ exist.
    It prints an `assistant_id` — copy it into `BACKBOARD_ASSISTANT_ID`.
 3. Run `python scripts/smoke_test_backboard.py` to confirm end-to-end.
 
+## Raspberry Pi deployment (Task 13)
+
+The laptop MVP is the first milestone; this stage replaces the laptop camera
+and software button with a Raspberry Pi 5 + Pi Camera + physical button,
+**without changing any AI pipeline code** (`controller.py`,
+`services/*.py`, `models.py`, `desktop_ui.py` are untouched — only the
+camera provider and trigger are swapped, exactly as the plan requires).
+
+These steps must be run **on the Pi itself** — `picamera2` and `gpiozero`
+are Raspberry Pi–specific and cannot be installed or tested on a laptop.
+
+1. Flash Raspberry Pi OS Bookworm, 64-bit, and confirm the Pi has network access.
+2. Test the Pi Camera and display independently (e.g. `libcamera-hello`)
+   before involving this app at all.
+3. Clone the repository onto the Pi.
+4. Install the system Picamera2 package, then create a venv that can see it:
+   ```bash
+   sudo apt install -y python3-picamera2 python3-libcamera
+   python3 -m venv --system-site-packages .venv
+   source .venv/bin/activate
+   pip install -r requirements-pi.txt
+   cp .env.example .env
+   ```
+   (`requirements-pi.txt` installs everything in `requirements.txt` plus
+   `gpiozero`; `picamera2` comes from the apt package above, not pip.)
+5. First run with `CAMERA_MODE=sample` in `.env` to confirm the app itself
+   starts correctly on the Pi before involving the camera.
+6. Run `python scripts/smoke_test_pi_camera.py` to confirm the Pi Camera
+   captures and decodes a frame, then set `CAMERA_MODE=pi` in `.env`.
+7. Wire a push-button between a GPIO pin (BCM numbering, default pin 17 —
+   physical pin 11) and a **GND** pin. No external resistor is needed;
+   `gpiozero.Button` uses the Pi's internal pull-up by default.
+8. Run `python scripts/smoke_test_gpio_button.py` and press the button to
+   confirm it's detected, then set `TRIGGER_MODE=gpio` in `.env`.
+9. Run `python app.py` — the physical button now calls the exact same
+   `run_interpretation()` the software button always called.
+
+Keep the laptop microphone or another externally available USB microphone
+until a Pi-compatible microphone is set up — `audio.py` is unchanged and
+still just opens the default input device via `sounddevice`.
+
 ## Running Iris
 
 **Live mode** (real microphone + camera):
@@ -145,8 +190,15 @@ python scripts/smoke_test_microphone.py        # records, then ask a human to co
 python scripts/smoke_test_camera.py             # captures one frame, ask a human to confirm it looks right
 python scripts/smoke_test_elevenlabs_stt.py     # requires ELEVENLABS_API_KEY
 python scripts/smoke_test_backboard.py          # requires BACKBOARD_API_KEY + BACKBOARD_ASSISTANT_ID
-python scripts/smoke_test_playback.py           # plays a local MP3 (or synthesizes one if TTS is configured)
+python scripts/smoke_test_playback.py           # plays a local audio file (or synthesizes one if TTS is configured)
 python scripts/smoke_test_end_to_end.py         # runs the real controller pipeline once, headlessly
+```
+
+Task 13 (Raspberry Pi only — see "Raspberry Pi deployment" above):
+
+```bash
+python scripts/smoke_test_pi_camera.py          # captures one frame via Picamera2
+python scripts/smoke_test_gpio_button.py        # confirms a physical button press is detected
 ```
 
 ## Tests
@@ -155,17 +207,27 @@ python scripts/smoke_test_end_to_end.py         # runs the real controller pipel
 python -m pytest tests/ -v
 ```
 
-The suite (41 tests) covers output validation, config loading, camera
-fallback/provider-selection, controller locking and repeated-press
-rejection, temp-file cleanup, demo-mode audio selection, and mock/real
-routing in the interpretation service — all without needing hardware,
-network access, or API keys.
+The suite (52 tests) covers output validation (including the `image_relevance`
+enum), config loading, camera fallback/provider-selection — including the
+Windows DirectShow backend selection, the capture retry loop, and a mocked
+Picamera2 for `PiCameraProvider` — the GPIO trigger (mocked `gpiozero`),
+controller locking and repeated-press rejection, temp-file cleanup, demo-mode
+audio selection, and mock/real routing in the interpretation service — all
+without needing hardware, network access, or API keys.
 
 ## Expected failure behavior
 
-- **No camera / capture fails** → continues with speech-only interpretation,
-  `visual_context_used=false`, and the UI shows "Camera unavailable —
-  interpretation used speech only." Never crashes.
+- **No camera / capture fails** → continues with speech-only interpretation
+  (`image_captured=false`, `visual_context_used=false`), and the UI shows
+  "Camera unavailable — interpretation used speech only." Never crashes. The
+  laptop camera capture itself retries briefly (up to ~1s) before giving up,
+  and uses the DirectShow backend on Windows for more reliable `cv2` opens.
+- **Image captured but not relevant** → distinct from a camera failure: the
+  photo was taken and inspected, but the model determined it didn't
+  contribute to the interpretation (`image_captured=true`,
+  `visual_context_used=false`, `image_relevance="not_relevant"`). The UI
+  shows "Image captured and inspected, but it did not contribute to this
+  interpretation" instead of the camera-unavailable message.
 - **No recent speech / silence** → a clear retry message; nothing is sent to
   ElevenLabs or Backboard.
 - **Network/API failure** (auth, timeout, rate limit, connection) → a safe
@@ -204,9 +266,11 @@ network access, or API keys.
 
 ## Current limitations
 
-- Raspberry Pi, Picamera2, GPIO, and physical-button support are **not
-  implemented** — `PiCameraProvider` is an interface-compatible stub that
-  raises `NotImplementedError`. This is the next stage of the project.
+- `PiCameraProvider` and `GPIOButtonTrigger` (Task 13) are implemented and
+  unit-tested with a mocked `picamera2`/`gpiozero`, but have **not been
+  exercised against real Raspberry Pi hardware** — that verification can
+  only happen on the Pi itself, via `scripts/smoke_test_pi_camera.py` and
+  `scripts/smoke_test_gpio_button.py`. See "Raspberry Pi deployment" above.
 - `samples/audio/sample.wav` and `samples/images/sample.jpg` are
   placeholders (a synthesized tone and a synthetic rainy-window image, not a
   real recording/photo). Regenerate them with

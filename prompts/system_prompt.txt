@@ -42,6 +42,6 @@ Always respond with a single JSON object only, no surrounding prose, using exact
   "certainty": "low | medium | high",
   "alternative": "string or null",
   "visual_context_used": true,
-  "image_relevance": "relevant | not_relevant | unavailable"
+  "image_relevance": "relevant | not_relevant | unavailable",
   "spoken_summary": "one short sentence, 20-30 words"
 }

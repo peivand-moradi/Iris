@@ -1,3 +1,4 @@
+import logging
 import threading
 import tkinter as tk
 
@@ -6,7 +7,9 @@ import controller
 from config import load_config
 from desktop_ui import DesktopUI
 from logging_setup import configure_logging, log_event
-from prompts.services.elevenlabs_client import synthesize_result
+from services.elevenlabs_client import synthesize_result
+
+logger = logging.getLogger("iris.app")
 
 
 class App:
@@ -24,8 +27,31 @@ class App:
         self.ui.set_demo_mode(self.config.demo_mode)
         self._init_microphone()
         self._init_camera_status()
+        self._gpio_trigger = self._init_trigger()
 
         self.ui.set_state(controller.LISTENING)
+
+    def _init_trigger(self):
+        """Task 13: start the physical GPIO button trigger if configured.
+
+        Calls the same trigger_interpretation() the software button uses, so
+        there is no separate code path for the physical button. Never lets a
+        missing/misconfigured Pi break app startup — same defensive style as
+        _init_microphone().
+        """
+        if self.config.trigger_mode != "gpio":
+            return None
+        try:
+            from trigger import GPIOButtonTrigger
+
+            gpio_trigger = GPIOButtonTrigger(
+                pin=self.config.gpio_button_pin, on_press=self.trigger_interpretation
+            )
+            gpio_trigger.start()
+            return gpio_trigger
+        except Exception as exc:
+            logger.warning("GPIO button trigger unavailable: %s", exc)
+            return None
 
     def _init_microphone(self) -> None:
         if self.config.demo_mode:
@@ -74,7 +100,6 @@ class App:
                         "Image captured and inspected, but it did not contribute "
                         "to this interpretation."
                     )
-            print(result.image_relevance)
             self.root.after(
                 0,
                 self.ui.show_result,
@@ -101,8 +126,6 @@ class App:
             threading.Thread(target=self._speak, args=(text,), daemon=True).start()
 
     def _speak(self, text: str) -> None:
-
-
         import playback
 
         path = synthesize_result(text)
@@ -119,6 +142,11 @@ class App:
             audio.stop_audio_stream()
         except Exception:
             pass
+        if self._gpio_trigger is not None:
+            try:
+                self._gpio_trigger.stop()
+            except Exception:
+                pass
         self.root.destroy()
 
     def run(self) -> None:

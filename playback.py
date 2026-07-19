@@ -9,68 +9,48 @@ logger = logging.getLogger("iris.playback")
 
 
 def play_mp3(path: Path) -> bool:
-    """Play a local MP3 file synchronously."""
+    """Play a local WAV file synchronously.
 
+    (Named play_mp3 for historical reasons; synthesize_result() produces WAV
+    specifically because winsound — the only stdlib playback option on
+    Windows — cannot play MP3, and aplay on Linux/Raspberry Pi OS is a WAV
+    player with no extra system dependency like ffmpeg required.)
+
+    Uses the platform's built-in playback command so no extra audio-decoding
+    dependency is required. Returns True if a player was found and ran
+    without error; False if playback is unsupported or failed.
+    """
     if not path.exists():
         logger.warning("Audio file does not exist: %s", path)
         return False
 
     system = platform.system()
-
     try:
         if system == "Darwin":
-            subprocess.run(
-                ["afplay", str(path)],
-                check=True,
-                capture_output=True,
-            )
+            subprocess.run(["afplay", str(path)], check=True, capture_output=True)
             return True
-
         if system == "Linux":
-            subprocess.run(
-                ["ffplay", "-nodisp", "-autoexit", str(path)],
-                check=True,
-                capture_output=True,
-            )
+            subprocess.run(["aplay", str(path)], check=True, capture_output=True)
             return True
-
         if system == "Windows":
-            import pygame
+            import winsound
 
-            pygame.mixer.init()
-            pygame.mixer.music.load(str(path))
-            pygame.mixer.music.play()
-
-            clock = pygame.time.Clock()
-
-            while pygame.mixer.music.get_busy():
-                clock.tick(10)
-
-            pygame.mixer.music.unload()
-            pygame.mixer.quit()
+            winsound.PlaySound(str(path), winsound.SND_FILENAME)
             return True
-
-        logger.warning(
-            "MP3 playback is not supported on platform: %s",
-            system,
-        )
+        logger.warning("Audio playback is not supported on platform: %s", system)
         return False
-
+    except FileNotFoundError:
+        logger.warning("No system audio player found for platform: %s", system)
+        return False
     except Exception as exc:
-        logger.warning("MP3 playback failed: %s", exc)
-
-        if system == "Windows":
-            try:
-                pygame.mixer.quit()
-            except Exception:
-                pass
-
+        # Broad on purpose: winsound.PlaySound raises RuntimeError (not OSError)
+        # on failure, and playback must never be allowed to break the caller.
+        logger.warning("Audio playback failed: %s", exc)
         return False
 
 
 def play_and_cleanup(path: Path) -> bool:
-    """Play a temporary MP3 and always delete it afterward."""
-
+    """Play a temporary audio file and always delete it afterward."""
     try:
         return play_mp3(path)
     finally:

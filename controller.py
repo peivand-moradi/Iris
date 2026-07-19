@@ -7,8 +7,8 @@ from camera import get_camera_provider
 from config import load_config
 from logging_setup import log_event
 from models import InterpretationResult
-from prompts.services import interpretation
-from prompts.services.elevenlabs_client import transcribe_audio
+from services import interpretation
+from services.elevenlabs_client import transcribe_audio
 from tempfiles import cleanup as cleanup_temp_file
 
 STARTING = "STARTING"

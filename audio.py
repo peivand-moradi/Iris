@@ -25,9 +25,10 @@ class RollingAudioBuffer:
     until save_recent_window() is called.
     """
 
-    def __init__(self, sample_rate: int, buffer_seconds: int) -> None:
+    def __init__(self, sample_rate: int, buffer_seconds: int, device: int | None = None) -> None:
         self.sample_rate = sample_rate
         self.buffer_seconds = buffer_seconds
+        self.device = device
         max_blocks = max(1, int(buffer_seconds * sample_rate / _BLOCK_FRAMES) + 1)
         self._blocks: deque[np.ndarray] = deque(maxlen=max_blocks)
         self._lock = threading.Lock()
@@ -51,10 +52,11 @@ class RollingAudioBuffer:
             channels=1,
             dtype="int16",
             blocksize=_BLOCK_FRAMES,
+            device=self.device,
             callback=self._callback,
         )
         self._stream.start()
-        logger.info("Microphone stream started at %d Hz", self.sample_rate)
+        logger.info("Microphone stream started at %d Hz (device=%s)", self.sample_rate, self.device)
 
     def stop(self) -> None:
         if self._stream is None:
@@ -94,7 +96,11 @@ class RollingAudioBuffer:
 
 
 _config = load_config()
-_buffer = RollingAudioBuffer(sample_rate=_config.mic_sample_rate, buffer_seconds=_config.audio_buffer_seconds)
+_buffer = RollingAudioBuffer(
+    sample_rate=_config.mic_sample_rate,
+    buffer_seconds=_config.audio_buffer_seconds,
+    device=_config.mic_device_index,
+)
 
 
 def start_audio_stream() -> None:
