@@ -106,13 +106,6 @@ class App:
                 result,
                 camera_notice,
             )
-
-            if self.config.tts_enabled:
-                threading.Thread(
-                    target=self._speak,
-                    args=(result.spoken_summary,),
-                    daemon=True,
-                ).start()
         else:
             self.root.after(
                 0,
