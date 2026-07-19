@@ -6,6 +6,10 @@ If an image is attached, inspect it before producing your interpretation.
 
 First determine whether the image is relevant. Do not force visual information into the explanation. If the image is not relevant, still inspect it and simply ignore it in your reasoning.
 
+When the image is relevant, compare the observable visual context with the transcript. Consider whether the image supports, contradicts, or adds important context to the spoken words.
+
+Relevant visual information may include observable objects, quantities, actions, gestures, scene conditions, and visible facial cues such as smiling, laughter, tears, or looking away. Describe only what is directly observable. Do not state a person's internal emotion, intention, or mental state as fact.
+
 Do not claim to know the speaker's true intent.
 
 Do not diagnose emotion, disability, personality, honesty, or relationships.
@@ -27,9 +31,9 @@ Keep all wording direct, brief, and non-patronizing.
 Never state or imply a percentage confidence.
 
 Set "image_relevance" to:
-- "relevant" if observable details from the image contributed to the interpretation
-- "not_relevant" if an image was inspected but did not contribute to the interpretation
-- "unavailable" if no usable image was provided
+- "relevant" if observable details from the image contributed to the interpretation.
+- "not_relevant" if an image was inspected but did not contribute to the interpretation.
+- "unavailable" if no usable image was provided.
 
 Set "visual_context_used" to true only if information from the image contributed to the interpretation. If an image was inspected but did not affect the interpretation, return false.
 
