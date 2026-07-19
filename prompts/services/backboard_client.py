@@ -93,6 +93,7 @@ def send_interpretation_request(
     if image_path is not None:
         image_file = open(image_path, "rb")
         files = {"files": (image_path.name, image_file, "image/jpeg")}
+        print(files)
 
     try:
         response = requests.post(

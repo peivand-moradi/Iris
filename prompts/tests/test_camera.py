@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ..camera import LaptopCameraProvider, PiCameraProvider, SampleImageProvider, get_camera_provider
+from camera import LaptopCameraProvider, PiCameraProvider, SampleImageProvider, get_camera_provider
 
 
 def test_sample_image_provider_missing_file_returns_none(tmp_path):
@@ -11,9 +11,9 @@ def test_sample_image_provider_missing_file_returns_none(tmp_path):
 
 
 def test_sample_image_provider_returns_existing_readable_image():
-    provider = SampleImageProvider(sample_path=Path("samples/images/sample.jpg"))
+    provider = SampleImageProvider(sample_path=Path("prompts/samples/images/sample.jpg"))
     result = provider.capture()
-    assert result == Path("samples/images/sample.jpg")
+    assert result == Path("prompts/samples/images/sample.jpg")
 
 
 def test_pi_camera_provider_raises_not_implemented():

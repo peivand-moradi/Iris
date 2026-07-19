@@ -22,4 +22,6 @@ class InterpretationResult:
     spoken_summary: str
     thread_id: str
     success: bool
+    image_relevance: str
     error: str | None = None
+    image_captured: bool = False

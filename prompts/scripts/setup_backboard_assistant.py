@@ -29,7 +29,9 @@ def main() -> None:
               "(Settings -> API Keys) and set it first.")
         raise SystemExit(1)
 
-    system_prompt_path = Path(__file__).resolve().parent.parent / "prompts" / "system_prompt.txt"
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+    system_prompt_path = PROJECT_ROOT / "prompts" / "system_prompt.txt"
     system_prompt = system_prompt_path.read_text()
 
     response = requests.post(

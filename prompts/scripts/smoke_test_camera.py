@@ -13,7 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from camera import LaptopCameraProvider  # noqa: E402
 from config import load_config  # noqa: E402
 
-OUTPUT_PATH = Path("scripts/_smoke_camera_output.jpg")
+OUTPUT_PATH = Path(__file__).resolve().parent / "_smoke_camera_output.jpg"
+
 
 
 def main() -> None:

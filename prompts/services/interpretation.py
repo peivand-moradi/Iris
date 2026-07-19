@@ -2,8 +2,8 @@ from pathlib import Path
 
 from config import load_config
 from models import InterpretationResult, TranscriptResult
-from services import backboard_client
-from services.output_validator import validate_interpretation
+from . import backboard_client
+from .output_validator import validate_interpretation
 
 
 def _configured(config) -> bool:

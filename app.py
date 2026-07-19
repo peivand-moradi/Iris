@@ -6,6 +6,7 @@ import controller
 from config import load_config
 from desktop_ui import DesktopUI
 from logging_setup import configure_logging, log_event
+from prompts.services.elevenlabs_client import synthesize_result
 
 
 class App:
@@ -50,17 +51,49 @@ class App:
 
     def _run_interpretation(self) -> None:
         result = controller.run_interpretation(
-            on_state_change=lambda state: self.root.after(0, self.ui.set_state, state)
+            on_state_change=lambda state: self.root.after(
+                0,
+                self.ui.set_state,
+                state,
+            )
         )
+
         if result.success:
             camera_notice = None
-            if self.config.camera_mode != "sample" and not self.config.demo_mode and not result.visual_context_used:
-                camera_notice = "Camera unavailable — interpretation used speech only."
-            self.root.after(0, self.ui.show_result, result, camera_notice)
+
+            if (
+                self.config.camera_mode != "sample"
+                and not self.config.demo_mode
+            ):
+                if not result.image_captured:
+                    camera_notice = (
+                        "Camera unavailable — interpretation used speech only."
+                    )
+                elif not result.visual_context_used:
+                    camera_notice = (
+                        "Image captured and inspected, but it did not contribute "
+                        "to this interpretation."
+                    )
+            print(result.image_relevance)
+            self.root.after(
+                0,
+                self.ui.show_result,
+                result,
+                camera_notice,
+            )
+
             if self.config.tts_enabled:
-                threading.Thread(target=self._speak, args=(result.spoken_summary,), daemon=True).start()
+                threading.Thread(
+                    target=self._speak,
+                    args=(result.spoken_summary,),
+                    daemon=True,
+                ).start()
         else:
-            self.root.after(0, self.ui.show_error, result.error or "Something went wrong. Please try again.")
+            self.root.after(
+                0,
+                self.ui.show_error,
+                result.error or "Something went wrong. Please try again.",
+            )
 
     def trigger_hear_result(self) -> None:
         text = self.ui.get_spoken_summary()
@@ -68,7 +101,7 @@ class App:
             threading.Thread(target=self._speak, args=(text,), daemon=True).start()
 
     def _speak(self, text: str) -> None:
-        from services.elevenlabs_client import synthesize_result
+
 
         import playback
 

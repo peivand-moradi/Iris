@@ -1,4 +1,6 @@
 import logging
+import platform
+import time
 from pathlib import Path
 from typing import Protocol
 
@@ -12,6 +14,8 @@ logger = logging.getLogger("iris.camera")
 _CAPTURE_WIDTH = 1280
 _CAPTURE_HEIGHT = 720
 _WARMUP_FRAMES = 3  # discard a few frames so exposure/white-balance can settle
+_MAX_CAPTURE_ATTEMPTS = 10
+_CAPTURE_RETRY_DELAY_SECONDS = 0.1
 
 
 class CameraProvider(Protocol):
@@ -24,23 +28,45 @@ class LaptopCameraProvider:
         self.camera_index = camera_index
 
     def capture(self) -> Path | None:
-        cap = cv2.VideoCapture(self.camera_index)
+        if platform.system() == "Windows":
+            cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(self.camera_index)
+
         try:
             if not cap.isOpened():
-                logger.warning("Laptop camera at index %d could not be opened", self.camera_index)
+                logger.warning(
+                    "Laptop camera at index %d could not be opened",
+                    self.camera_index,
+                )
                 return None
 
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, _CAPTURE_WIDTH)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, _CAPTURE_HEIGHT)
 
             frame = None
-            for _ in range(_WARMUP_FRAMES + 1):
-                ok, frame = cap.read()
-                if not ok:
-                    logger.warning("Laptop camera failed to deliver a frame")
-                    return None
+
+            for attempt in range(_MAX_CAPTURE_ATTEMPTS):
+                ok, candidate = cap.read()
+
+                if ok and candidate is not None and candidate.size > 0:
+                    frame = candidate
+
+                if frame is not None and attempt >= _WARMUP_FRAMES:
+                    break
+
+                time.sleep(_CAPTURE_RETRY_DELAY_SECONDS)
+
+            if frame is None:
+                logger.warning(
+                    "Laptop camera at index %d opened but failed to deliver "
+                    "a usable frame",
+                    self.camera_index,
+                )
+                return None
 
             path = new_temp_path(".jpg")
+
             if not cv2.imwrite(str(path), frame):
                 logger.warning("Failed to write captured frame to disk")
                 return None
@@ -50,9 +76,11 @@ class LaptopCameraProvider:
                 return None
 
             return path
+
         except cv2.error as exc:
             logger.warning("OpenCV error during capture: %s", exc)
             return None
+
         finally:
             cap.release()
 
@@ -65,14 +93,19 @@ class SampleImageProvider:
         if not self.sample_path.exists():
             logger.warning("Sample image not found: %s", self.sample_path)
             return None
+
         if cv2.imread(str(self.sample_path)) is None:
-            logger.warning("Sample image could not be decoded: %s", self.sample_path)
+            logger.warning(
+                "Sample image could not be decoded: %s",
+                self.sample_path,
+            )
             return None
+
         return self.sample_path
 
 
 class PiCameraProvider:
-    """Interface-compatible stub. Real Picamera2 integration is out of scope (Task 13)."""
+    """Interface-compatible stub. Real Picamera2 integration is out of scope."""
 
     def capture(self) -> Path | None:
         raise NotImplementedError(
@@ -83,11 +116,14 @@ class PiCameraProvider:
 
 def get_camera_provider(mode: str) -> CameraProvider:
     config = load_config()
+
     providers = {
         "laptop": lambda: LaptopCameraProvider(config.camera_index),
         "sample": SampleImageProvider,
         "pi": PiCameraProvider,
     }
+
     if mode not in providers:
         raise ValueError(f"Unknown camera mode: {mode}")
+
     return providers[mode]()
